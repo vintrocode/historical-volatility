@@ -202,4 +202,4 @@ ggplot(data=bluechips[token0 == "YFI" & token1 == "WETH" & variable != "daily_AP
   subtitle="*SCALE INCREASED")
 ```
 
-They have right-skewed graphs because they had a ton of activity early on. Given an incentive to provide liquidity like massive returns, people aped in.
+They have right-skewed graphs because they had a ton of activity early on. Given an incentive to provide liquidity like massive returns, people aped in. Thanks for reading!
