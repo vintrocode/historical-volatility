@@ -1,0 +1,205 @@
+---
+title: "Historical Yield Volatility -- Uniswap V2 Pools"
+author: "Vince Trost"
+output:
+  html_document:
+    df_print: paged
+---
+
+# Introduction
+
+Part of the appeal to DeFi is the ability to earn passive income by providing liquidity to different pools and earning a small portion of the fees collected from traders using said pools. The issue is that these yields vary based on demand for the assets in the pools. Some pools lure people in with absurd APYs, but ultimately do not sustain these returns.  
+
+We are interested in studying the volatility of these returns over time for a number of reasons:
+- pick a pool to invest in based on your risk tolerance
+- speculate on pool volatility
+- visualize & understand different incentive methods, pools, etc
+
+# Scope
+
+For this hackathon, we've limited our scope to just studying the Uniswap V2 pools. Calculating volatility on these pools' returns is relatively straightforward and there's enough usage to provide an interesting analysis.
+
+# Volatility over 10/50/100 Days
+
+These time periods were chosen arbitrarily. They're aimed at providing a short/medium/long term volatility measure. This measure is calculated by computing the daily APY for each token pair and then taking a rolling standard deviation based on the window we're interested in. We expect to see the short term volatility measure be more sporadic than the longer-term measures.
+
+```{r, echo=FALSE, warning=FALSE, message=FALSE}
+library(data.table)
+library(zoo)
+library(ggplot2)
+library(lubridate)
+
+aave_weth <- fread("../data/processed/aave-weth.csv")
+dpi_weth <- fread("../data/processed/dpi-weth.csv")
+matic_weth <- fread("../data/processed/matic-weth.csv")
+scammy_weth <- fread("../data/processed/scammy-weth.csv")
+sushi_weth <- fread("../data/processed/sushi-weth.csv")
+usdc_usdt <- fread("../data/processed/usdc-usdt.csv")
+wbtc_weth <- fread("../data/processed/wbtc-weth.csv")
+weth_usdt <- fread("../data/processed/weth-usdt.csv")
+dai_weth <- fread("../data/processed/dai-weth.csv")
+link_weth <- fread("../data/processed/link-weth.csv")
+mkr_weth <- fread("../data/processed/mkr-weth.csv")
+shib_weth <- fread("../data/processed/shib-weth.csv")
+uni_weth <- fread("../data/processed/uni-weth.csv")
+usdc_weth <- fread("../data/processed/usdc-weth.csv")
+welp_weth <- fread("../data/processed/welp-weth.csv")
+yfi_weth <- fread("../data/processed/yfi-weth.csv")
+```
+
+```{r, echo=FALSE, warning=FALSE, message=FALSE}
+# categorize the pools for easier analysis
+stable_pools <- rbind(weth_usdt, wbtc_weth, usdc_usdt, usdc_weth, dai_weth)
+defi_bluechips <- rbind(aave_weth, link_weth, uni_weth, yfi_weth, sushi_weth, mkr_weth, matic_weth)
+memecoins <- rbind(scammy_weth, shib_weth, welp_weth)
+
+# convert the dates to human readable format
+stable_pools$date <- as_datetime(stable_pools$date)
+defi_bluechips$date <- as_datetime(defi_bluechips$date)
+memecoins$date <- as_datetime(memecoins$date)
+
+```
+
+```{r, echo=FALSE, warning=FALSE, message=FALSE}
+# compute the APY by day
+stable_pools[, daily_APY := ((dailyVolumeUSD*0.003)/reserveUSD)*365, 
+             by=.(token0, token1, date)]
+defi_bluechips[, daily_APY := ((dailyVolumeUSD*0.003)/reserveUSD)*365, 
+               by=.(token0, token1, date)]
+memecoins[, daily_APY := ((dailyVolumeUSD*0.003)/reserveUSD)*365, 
+          by=.(token0, token1, date)]
+
+# compute the daily return % (just don't multiply by 365)
+stable_pools[, daily_return := ((dailyVolumeUSD*0.003)/reserveUSD), 
+             by=.(token0, token1, date)]
+defi_bluechips[, daily_return := ((dailyVolumeUSD*0.003)/reserveUSD), 
+               by=.(token0, token1, date)]
+memecoins[, daily_return := ((dailyVolumeUSD*0.003)/reserveUSD), 
+          by=.(token0, token1, date)]
+```
+
+```{r, echo=FALSE, warning=FALSE, message=FALSE}
+# re-order desc by date
+stable_pools <- stable_pools[order(date)]
+defi_bluechips <- defi_bluechips[order(date)]
+memecoins <- memecoins[order(date)]
+```
+
+```{r, echo=FALSE, warning=FALSE, message=FALSE}
+# compute the rolling sd's
+
+# 10 day
+stable_pools[, ten_day_apy_sd:= rollapply(daily_APY, width=10, FUN=sd, fill=0, align="right"), 
+             by=.(token0, token1)]
+# 50 day
+stable_pools[, fifty_day_apy_sd:= rollapply(daily_APY, width=50, FUN=sd, fill=0, align="right"), 
+             by=.(token0, token1)]
+# 100 day
+stable_pools[, hundred_day_apy_sd:= rollapply(daily_APY, width=100, FUN=sd, fill=0, align="right"),
+             by=.(token0, token1)]
+
+# 10 day
+defi_bluechips[, ten_day_apy_sd:= rollapply(daily_APY, width=10, FUN=sd, fill=0, align="right"),
+             by=.(token0, token1)]
+# 50 day
+defi_bluechips[, fifty_day_apy_sd:= rollapply(daily_APY, width=50, FUN=sd, fill=0, align="right"), 
+             by=.(token0, token1)]
+# 100 day
+defi_bluechips[, hundred_day_apy_sd:=rollapply(daily_APY, width=100, FUN=sd, fill=0, align="right"),
+             by=.(token0, token1)]
+
+# 10 day
+memecoins[, ten_day_apy_sd:= rollapply(daily_APY, width=10, FUN=sd, fill=0, align="right"), 
+             by=.(token0, token1)]
+# 50 day
+memecoins[, fifty_day_apy_sd:= rollapply(daily_APY, width=50, FUN=sd, fill=0, align="right"), 
+             by=.(token0, token1)]
+# 100 day
+memecoins[, hundred_day_apy_sd:= rollapply(daily_APY, width=100, FUN=sd, fill=0, align="right"), 
+             by=.(token0, token1)]
+```
+
+```{r, echo=FALSE, warning=FALSE, message=FALSE}
+# re-format the data for plotting
+stable <- melt(stable_pools[, .(date, token0, token1, daily_APY, ten_day_apy_sd, fifty_day_apy_sd, hundred_day_apy_sd)], id.vars = c("date", "token0", "token1"))
+bluechips <- melt(defi_bluechips[,.(date, token0, token1, daily_APY, ten_day_apy_sd, fifty_day_apy_sd, hundred_day_apy_sd)], id.vars = c("date", "token0", "token1"))
+memes <- melt(memecoins[,.(date, token0, token1, daily_APY, ten_day_apy_sd, fifty_day_apy_sd, hundred_day_apy_sd)], id.vars = c("date", "token0", "token1"))
+```
+
+
+# Plots -- Stable Pools
+
+Do stable pools offer more consistent returns? Let's find out.
+
+```{r, echo=FALSE, warning=FALSE, message=FALSE, fig.width=10}
+ggplot(data = stable[variable != "daily_APY"], aes(x=date, y=value, color=variable)) + 
+  geom_line() +
+  theme(axis.text.x=element_blank(),
+        axis.ticks.x=element_blank()) +
+  facet_wrap(~ token0 + token1) +
+  labs(title = "Stablecoin Pool Pairs 10/50/100 Day APY Volatility",
+       y = "Volatility", x = "Time")
+
+```
+
+What's really interesting to me is the stability of the WBTC-WETH pair. We all know ETH & BTC are the two main drivers of the crypto markets, but their pair volatility is remarkably low. This just further reinforces the idea that these tokens move in unison more times than not. 
+The next observation I made here is the volatility of all the dollar-pegged stablecoins have relative to the price of ether. Ether moves in price a lot (we know this). Is there some free alpha here though? Let's take a closer look...
+
+```{r, echo=FALSE, warning=FALSE, message=FALSE, fig.width=10}
+ggplot(data=stable[token0 == "DAI" & token1 == "WETH" & variable != "daily_APY"], aes(x=date, y=value, colour=variable)) + 
+  geom_line(size=1) +
+  coord_cartesian(ylim = c(0, 1.3)) +
+  geom_line(data=stable[token0 == "DAI" & token1 == "WETH" & variable == "daily_APY"], alpha=0.4) +
+  ggtitle("DAI-WETH 10/50/100 Day APY Volatilities")
+```
+
+
+```{r, echo=FALSE, warning=FALSE, message=FALSE, fig.width=10}
+# PLOT
+ggplot(data=stable[token0 == "USDC" & token1 == "WETH" & variable != "daily_APY"], aes(x=date, y=value, colour=variable)) + 
+  geom_line(size=1) +
+  coord_cartesian(ylim = c(0, 1.3)) +
+  geom_line(data=stable[token0 == "USDC" & token1 == "WETH" & variable == "daily_APY"], alpha=0.4) +
+  ggtitle("USDC-WETH 10/50/100 Day APY Volatilities")
+```
+
+The whole idea behind taking a 10-day, 50-day, and 100-day volatility measure was to get an idea of how much specific events influence the APY over time. It's almost like how in Technical Trading there's the 20, 50, and 200 day moving averages. This is similar, but not the same. In both of these charts, the two longer terms act as "averages" compared to the 10-day volatility (in purple). If these volatility measures exhibit a mean-reverting property, then (*free alpha alert*) just long the vol when the 10-day below and short it when it's above the longer volatility measures. This isn't financial advice, just an observation. DYOR.
+
+# Plots -- DeFi Bluechips
+
+Next, I was interested in studying the more popular projects' token pools with respect to ETH.
+
+```{r, echo=FALSE, warning=FALSE, message=FALSE, fig.width=10}
+ggplot(data = bluechips[variable != "daily_APY"], aes(x=date, y=value, color=variable)) + 
+  geom_line() +
+  coord_cartesian(ylim = c(0, 1.3)) +
+  theme(axis.text.x=element_blank(),
+        axis.ticks.x=element_blank()) +
+  facet_wrap(~ token0 + token1) +
+  labs(title = " \"DeFi Bluechip\" Pool Pairs 10/50/100 Day APY Volatility",
+       y = "Volatility", x = "Time")
+
+```
+
+Let's look at Sushi and YFI with WETH. They both had figures that extended off the chart.
+
+```{r, echo=FALSE, warning=FALSE, message=FALSE, fig.width=10}
+ggplot(data=bluechips[token0 == "SUSHI" & token1 == "WETH" & variable != "daily_APY"], aes(x=date, y=value, colour=variable)) + 
+  geom_line(size=1) +
+  coord_cartesian(ylim = c(0, 13)) +
+  geom_line(data=bluechips[token0 == "SUSHI" & token1 == "WETH" & variable == "daily_APY"], alpha=0.4) +
+  labs(title="SUSHI-WETH 10/50/100 Day APY Volatilities",
+  subtitle="*SCALE INCREASED")
+```
+
+
+```{r, echo=FALSE, warning=FALSE, message=FALSE, fig.width=10}
+ggplot(data=bluechips[token0 == "YFI" & token1 == "WETH" & variable != "daily_APY"], aes(x=date, y=value, colour=variable)) + 
+  geom_line(size=1) +
+  coord_cartesian(ylim = c(0, 3)) +
+  geom_line(data=bluechips[token0 == "YFI" & token1 == "WETH" & variable == "daily_APY"], alpha=0.4) +
+  labs(title="YFI-WETH 10/50/100 Day APY Volatilities",
+  subtitle="*SCALE INCREASED")
+```
+
+They have right-skewed graphs because they had a ton of activity early on. Given an incentive to provide liquidity like massive returns, people aped in.
